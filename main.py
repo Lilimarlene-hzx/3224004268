@@ -1,4 +1,5 @@
 import argparse
+import re  #【V3新增】
 import sys
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -18,13 +19,31 @@ def read_text(path: Path) -> str:
         raise OSError(f"读取文件失败 {path}: {e}") from e
 
 
+def preprocess_text(text: str) -> str:
+    """Remove punctuation and whitespace, preserving Chinese, letters, and digits."""
+    cleaned = re.sub(r"[^\u3400-\u9fffA-Za-z0-9]", "", text)
+    return cleaned.lower()
+
+
 def plagiarism_rate(original: str, copy: str) -> float:
-    """Return the normalized similarity between two papers."""
-    if not original and not copy:
+    """Return a weighted sequence and character-set similarity in [0, 1]."""
+    orig_clean = preprocess_text(original)
+    copy_clean = preprocess_text(copy)
+
+    if not orig_clean and not copy_clean:
         return 1.0
-    if not original or not copy:
+    if not orig_clean or not copy_clean:
         return 0.0
-    return SequenceMatcher(None, original, copy, autojunk=False).ratio()
+
+    lcs_ratio = SequenceMatcher(None, orig_clean, copy_clean, autojunk=False).ratio()
+
+    set_orig = set(orig_clean)
+    set_copy = set(copy_clean)
+    intersection = len(set_orig & set_copy)
+    union = len(set_orig | set_copy)
+    jaccard_ratio = intersection / union if union != 0 else 0.0
+
+    return lcs_ratio * 0.7 + jaccard_ratio * 0.3
 
 
 def main() -> None:
