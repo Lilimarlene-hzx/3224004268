@@ -1,6 +1,7 @@
-import argparse
+import argparse  # noqa: I001
 import re  #【V3新增】
 import sys
+import hashlib  
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -25,8 +26,9 @@ def preprocess_text(text: str) -> str:
     return cleaned.lower()
 
 
+
 def plagiarism_rate(original: str, copy: str) -> float:
-    """Return a weighted sequence and character-set similarity in [0, 1]."""
+    """【优化版】自适应切换：短文本精确匹配，长文本分块哈希"""
     orig_clean = preprocess_text(original)
     copy_clean = preprocess_text(copy)
 
@@ -35,15 +37,34 @@ def plagiarism_rate(original: str, copy: str) -> float:
     if not orig_clean or not copy_clean:
         return 0.0
 
-    lcs_ratio = SequenceMatcher(None, orig_clean, copy_clean, autojunk=False).ratio()
+    # 策略切换：5000字符为阈值
+    if len(orig_clean) < 5000 or len(copy_clean) < 5000:
+        # 短文本：使用精确算法，保证精度
+        return SequenceMatcher(None, orig_clean, copy_clean, autojunk=False).ratio()
 
-    set_orig = set(orig_clean)
-    set_copy = set(copy_clean)
-    intersection = len(set_orig & set_copy)
-    union = len(set_orig | set_copy)
-    jaccard_ratio = intersection / union if union != 0 else 0.0
+    # 长文本：使用分块哈希，保证速度
+    BLOCK_SIZE = 50
 
-    return lcs_ratio * 0.7 + jaccard_ratio * 0.3
+    def make_blocks(text):
+        # 步长设为块大小的一半，避免边界错位导致漏检
+        step = BLOCK_SIZE // 2
+        return [text[i:i+BLOCK_SIZE] for i in range(0, len(text) - BLOCK_SIZE + 1, step)]
+
+    blocks_orig = make_blocks(orig_clean)
+    blocks_copy = make_blocks(copy_clean)
+
+    # 构建原文哈希表
+    hash_table = set()
+    for block in blocks_orig:
+        hash_table.add(hashlib.md5(block.encode('utf-8')).hexdigest())
+
+    # 统计命中块数
+    matched = 0
+    for block in blocks_copy:
+        if hashlib.md5(block.encode('utf-8')).hexdigest() in hash_table:
+            matched += 1
+
+    return matched / len(blocks_copy) if blocks_copy else 0.0
 
 
 def main() -> None:

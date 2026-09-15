@@ -1,0 +1,21 @@
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 单元测试缓存
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 虚拟环境
+venv/
+.env/
+
+# IDE 配置文件
+.vscode/
+.idea/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
